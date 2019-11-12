@@ -6,21 +6,24 @@ import (
 	"github.com/bluele/gcache"
 	"github.com/coocood/freecache"
 	gocache "github.com/patrickmn/go-cache"
+	"log"
 	"math/rand"
 	"testing"
 	"time"
 )
 
-const maxEntrySize = 256
-const ttl = 5 * time.Second
-const timeUnit = 5
+const maxEntrySize = 512
+const ttl = timeUnit * time.Second
+const timeUnit =30
 const defaultGoCacheCleanWindow = 30 * time.Second
 const defaultTTl = 168 * time.Second
 
 func BenchmarkFreeCacheSet(b *testing.B) {
 	cache := freecache.NewCache(b.N * maxEntrySize)
 	for i := 0; i < b.N; i++ {
-		cache.Set([]byte(key(i)), value(), timeUnit)
+		if err := cache.Set([]byte(key(i)), value(), timeUnit); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -42,7 +45,9 @@ func BenchmarkTTLCacheSet(b *testing.B) {
 func BenchmarkGCacheSet(b *testing.B) {
 	gc := gcache.New(b.N).ARC().Build()
 	for i := 0; i < b.N; i++ {
-		gc.SetWithExpire(key(i), value(), ttl)
+		if err := gc.SetWithExpire(key(i), value(), ttl); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -64,12 +69,16 @@ func BenchmarkFreeCacheGet(b *testing.B) {
 	b.StopTimer()
 	cache := freecache.NewCache(b.N * maxEntrySize)
 	for i := 0; i < b.N; i++ {
-		cache.Set([]byte(key(i)), value(), timeUnit)
+		if err := cache.Set([]byte(key(i)), value(), timeUnit); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		cache.Get([]byte(key(i)))
+		if _, err := cache.Get([]byte(key(i))); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -89,7 +98,7 @@ func BenchmarkGoCacheGet(b *testing.B) {
 func BenchmarkTTLCacheGet(b *testing.B) {
 	b.StopTimer()
 	cache := ttlcache.NewCache()
-	
+
 	for i := 0; i < b.N; i++ {
 		cache.SetWithTTL(key(i), value(), ttl)
 	}
@@ -104,12 +113,16 @@ func BenchmarkGCacheGet(b *testing.B) {
 	b.StopTimer()
 	gc := gcache.New(b.N).ARC().Build()
 	for i := 0; i < b.N; i++ {
-		gc.SetWithExpire(key(i), value(), ttl)
+		if err := gc.SetWithExpire(key(i), value(), ttl); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		gc.Get(key(i))
+		if _, err := gc.Get(key(i)); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -147,8 +160,10 @@ func BenchmarkFreeCacheSetParallel(b *testing.B) {
 		id := rand.Intn(1000)
 		counter := 0
 		for pb.Next() {
-			cache.Set([]byte(parallelKey(id, counter)), value(), timeUnit)
-			counter = counter + 1
+			if err := cache.Set([]byte(parallelKey(id, counter)), value(), timeUnit); err != nil {
+				log.Fatal(err)
+			}
+			counter += 1
 		}
 	})
 }
@@ -162,14 +177,14 @@ func BenchmarkGoCacheSetParallel(b *testing.B) {
 		counter := 0
 		for pb.Next() {
 			cache.Set(parallelKey(id, counter), value(), ttl)
-			counter = counter + 1
+			counter += 1
 		}
 	})
 }
 
 func BenchmarkTTLCacheSetParallel(b *testing.B) {
 	cache := ttlcache.NewCache()
-	
+
 	rand.Seed(time.Now().Unix())
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -177,7 +192,7 @@ func BenchmarkTTLCacheSetParallel(b *testing.B) {
 		counter := 0
 		for pb.Next() {
 			cache.SetWithTTL(parallelKey(id, counter), value(), ttl)
-			counter = counter + 1
+			counter += 1
 		}
 	})
 }
@@ -191,8 +206,10 @@ func BenchmarkGCacheSetParallel(b *testing.B) {
 		id := rand.Intn(1000)
 		counter := 0
 		for pb.Next() {
-			gc.SetWithExpire(parallelKey(id, counter), value(), ttl)
-			counter = counter + 1
+			if err := gc.SetWithExpire(parallelKey(id, counter), value(), ttl); err != nil {
+				log.Fatal(err)
+			}
+			counter += 1
 		}
 	})
 }
@@ -214,7 +231,7 @@ func BenchmarkGCacheSetParallel(b *testing.B) {
 //				log.Fatal(err)
 //			}
 //
-//			counter = counter + 1
+//			counter += 1
 //		}
 //	})
 //}
@@ -222,16 +239,25 @@ func BenchmarkGCacheSetParallel(b *testing.B) {
 func BenchmarkFreeCacheGetParallel(b *testing.B) {
 	b.StopTimer()
 	cache := freecache.NewCache(b.N * maxEntrySize)
+	//wg := sync.WaitGroup{}
+	//wg.Add(b.N)
 	for i := 0; i < b.N; i++ {
-		cache.Set([]byte(key(i)), value(), timeUnit)
+		//go func(i int) {
+		//	defer func() { wg.Done() }()
+			if err := cache.Set([]byte(key(i)), value(), timeUnit); err != nil {
+				log.Fatal(err)
+			}
+		//}(i)
 	}
-
+	//wg.Wait()
 	b.StartTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		counter := 0
 		for pb.Next() {
-			cache.Get([]byte(key(counter)))
-			counter = counter + 1
+			if _, err := cache.Get([]byte(key(counter))); err != nil {
+				log.Fatal(err)
+			}
+			counter += 1
 		}
 	})
 }
@@ -248,7 +274,7 @@ func BenchmarkGoCacheGetParallel(b *testing.B) {
 		counter := 0
 		for pb.Next() {
 			cache.Get(key(counter))
-			counter = counter + 1
+			counter += 1
 		}
 	})
 }
@@ -256,7 +282,7 @@ func BenchmarkGoCacheGetParallel(b *testing.B) {
 func BenchmarkTTLCacheGetParallel(b *testing.B) {
 	b.StopTimer()
 	cache := ttlcache.NewCache()
-	
+
 	for i := 0; i < b.N; i++ {
 		cache.SetWithTTL(key(i), value(), ttl)
 	}
@@ -266,7 +292,7 @@ func BenchmarkTTLCacheGetParallel(b *testing.B) {
 		counter := 0
 		for pb.Next() {
 			cache.Get(key(counter))
-			counter = counter + 1
+			counter += 1
 		}
 	})
 }
@@ -276,15 +302,19 @@ func BenchmarkGCacheGetParallel(b *testing.B) {
 	gc := gcache.New(b.N).ARC().Build()
 
 	for i := 0; i < b.N; i++ {
-		gc.SetWithExpire(key(i), value(), ttl)
+		if err := gc.SetWithExpire(key(i), value(), ttl); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	b.StartTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		counter := 0
 		for pb.Next() {
-			gc.Get(key(counter))
-			counter = counter + 1
+			if _, err := gc.Get(key(counter)); err != nil {
+				log.Fatal(err)
+			}
+			counter += 1
 		}
 	})
 }
@@ -314,7 +344,7 @@ func BenchmarkGCacheGetParallel(b *testing.B) {
 //			}); err != nil {
 //				log.Fatal(err)
 //			}
-//			counter = counter + 1
+//			counter += 1
 //		}
 //	})
 //}
@@ -330,7 +360,6 @@ func value() []byte {
 func parallelKey(threadID int, counter int) string {
 	return fmt.Sprintf("key-%04d-%06d", threadID, counter)
 }
-
 
 //func startBadger() *badger.DB {
 //	options := badger.DefaultOptions("/tmp/badger").WithLogger(nil)
